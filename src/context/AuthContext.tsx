@@ -6,6 +6,7 @@ interface AuthContextType {
   currentUser: User | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
+  register: (name: string, email: string, password: string) => Promise<boolean>;
   isAdmin: boolean;
 }
 
@@ -44,6 +45,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return false;
   };
 
+  // Register function
+  const register = async (name: string, email: string, password: string): Promise<boolean> => {
+    // Check if user already exists
+    const existingUser = localStorageService.getUserByEmail(email);
+    
+    if (existingUser) {
+      return false;
+    }
+    
+    // Create new user with cashier role by default
+    const newUser: User = {
+      id: Date.now().toString(),
+      name,
+      email,
+      password,
+      role: 'cashier' // Default role is cashier
+    };
+    
+    // Add user to localStorage
+    localStorageService.addUser(newUser);
+    
+    // Auto login after registration
+    setCurrentUser(newUser);
+    setIsAdmin(false); // New users are not admins by default
+    sessionStorage.setItem('pos_current_user', JSON.stringify(newUser));
+    
+    return true;
+  };
+
   // Logout function
   const logout = () => {
     setCurrentUser(null);
@@ -52,7 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, login, logout, isAdmin }}>
+    <AuthContext.Provider value={{ currentUser, login, logout, register, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );
