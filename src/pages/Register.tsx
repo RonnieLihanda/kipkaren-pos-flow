@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/components/ui/use-toast';
@@ -15,7 +15,14 @@ const Register: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const { register, currentUser } = useAuth();
+  
+  // Redirect if already logged in
+  useEffect(() => {
+    if (currentUser) {
+      navigate('/');
+    }
+  }, [currentUser, navigate]);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +49,7 @@ const Register: React.FC = () => {
         navigate('/login');
       }
     } catch (error) {
+      console.error('Registration error:', error);
       toast({
         variant: 'destructive',
         title: 'Registration Failed',

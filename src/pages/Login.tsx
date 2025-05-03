@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/components/ui/use-toast';
@@ -8,12 +8,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 const Login: React.FC = () => {
-  const [email, setEmail] = useState('admin@mic3hardware.com');
-  const [password, setPassword] = useState('admin123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
-  const { login } = useAuth();
+  const { login, currentUser } = useAuth();
   const navigate = useNavigate();
+  
+  // Redirect if already logged in
+  useEffect(() => {
+    if (currentUser) {
+      navigate('/');
+    }
+  }, [currentUser, navigate]);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +34,7 @@ const Login: React.FC = () => {
           title: 'Login Successful',
           description: 'Welcome back to Mic3 Hardware POS!',
         });
-        navigate('/');
+        // The redirect will happen in the useEffect
       } else {
         toast({
           variant: 'destructive',
@@ -35,6 +42,13 @@ const Login: React.FC = () => {
           description: 'Invalid email or password. Please try again.',
         });
       }
+    } catch (error) {
+      console.error('Login error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Login Error',
+        description: 'An unexpected error occurred. Please try again.',
+      });
     } finally {
       setIsLoading(false);
     }

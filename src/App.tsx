@@ -3,8 +3,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "./context/AuthContext";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -26,6 +26,28 @@ const queryClient = new QueryClient({
   },
 });
 
+// Protected route component that requires authentication
+const ProtectedRoute = () => {
+  const { currentUser, loading } = useAuth();
+  
+  if (loading) {
+    return <div className="flex h-screen items-center justify-center">Loading...</div>;
+  }
+  
+  return currentUser ? <Outlet /> : <Navigate to="/login" />;
+};
+
+// Admin route component that requires admin role
+const AdminRoute = () => {
+  const { currentUser, isAdmin, loading } = useAuth();
+  
+  if (loading) {
+    return <div className="flex h-screen items-center justify-center">Loading...</div>;
+  }
+  
+  return currentUser && isAdmin ? <Outlet /> : <Navigate to="/" />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -34,15 +56,25 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
+            {/* Public routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/" element={<Index />} />
-            <Route path="/inventory" element={<Inventory />} />
-            <Route path="/sales" element={<Sales />} />
-            <Route path="/suppliers" element={<Suppliers />} />
-            <Route path="/expenses" element={<Expenses />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/settings" element={<Settings />} />
+            
+            {/* Protected routes */}
+            <Route element={<ProtectedRoute />}>
+              <Route path="/" element={<Index />} />
+              <Route path="/sales" element={<Sales />} />
+              <Route path="/inventory" element={<Inventory />} />
+              <Route path="/suppliers" element={<Suppliers />} />
+              <Route path="/settings" element={<Settings />} />
+              
+              {/* Admin only routes */}
+              <Route element={<AdminRoute />}>
+                <Route path="/expenses" element={<Expenses />} />
+                <Route path="/reports" element={<Reports />} />
+              </Route>
+            </Route>
+            
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

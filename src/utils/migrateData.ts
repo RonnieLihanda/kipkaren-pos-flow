@@ -1,7 +1,7 @@
 
 import { localStorageService } from '../services/localStorage';
 import { supabaseService } from '../services/supabaseService';
-import { v4 as uuidv4 } from 'uuid';
+import { toast } from '@/components/ui/use-toast';
 
 export const migrateData = async () => {
   try {
@@ -10,6 +10,7 @@ export const migrateData = async () => {
     for (const category of categories) {
       await supabaseService.saveCategory(category);
     }
+    console.log('Categories migrated successfully');
     
     // Migrate suppliers
     const suppliers = localStorageService.getSuppliers();
@@ -26,6 +27,7 @@ export const migrateData = async () => {
         supplierMap.set(supplier.id, newSupplier.id);
       }
     }
+    console.log('Suppliers migrated successfully');
     
     // Migrate products
     const products = localStorageService.getProducts();
@@ -49,19 +51,22 @@ export const migrateData = async () => {
         productMap.set(product.id, newProduct.id);
       }
     }
+    console.log('Products migrated successfully');
     
     // Migrate sales and sale items
     const sales = localStorageService.getSales();
     
     for (const sale of sales) {
+      // Convert payment method to the expected format
+      const paymentMethod = sale.paymentMethod.toLowerCase() as 'cash' | 'mpesa' | 'credit';
+      
       const saleData = {
         total: sale.total,
-        payment_method: sale.paymentMethod,
-        staff_id: sale.staffId,
-        staff_name: sale.staffName,
+        payment_method: paymentMethod,
+        staff_id: sale.staffId || 'unknown',
+        staff_name: sale.staffName || 'Unknown',
         customer_name: sale.customerName,
-        reference: sale.reference,
-        created_at: sale.createdAt
+        reference: sale.reference
       };
       
       const saleItems = sale.items.map(item => ({
@@ -74,6 +79,7 @@ export const migrateData = async () => {
       
       await supabaseService.saveSale(saleData, saleItems);
     }
+    console.log('Sales migrated successfully');
     
     // Migrate expenses
     const expenses = localStorageService.getExpenses();
@@ -87,12 +93,20 @@ export const migrateData = async () => {
         notes: expense.notes
       });
     }
+    console.log('Expenses migrated successfully');
     
-    // Migrate deliveries would be added here
-    
+    toast({
+      title: 'Migration Complete',
+      description: 'All data has been successfully migrated to Supabase.'
+    });
     return true;
   } catch (error) {
     console.error('Migration error:', error);
+    toast({
+      title: 'Migration Failed',
+      description: 'An error occurred during migration. See console for details.',
+      variant: 'destructive'
+    });
     return false;
   }
 };

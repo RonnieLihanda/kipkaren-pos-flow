@@ -61,7 +61,7 @@ export const TopBar: React.FC = () => {
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <span className="text-sm font-medium text-gray-700 mr-2">
-                {currentUser?.name} ({currentUser?.role})
+                {currentUser?.name} ({currentUser?.app_role})
               </span>
               <button
                 onClick={handleLogout}

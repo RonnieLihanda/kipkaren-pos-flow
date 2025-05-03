@@ -4,8 +4,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
 import { Session, User } from '@supabase/supabase-js';
 
+interface UserMetadata {
+  app_role?: "admin" | "cashier";
+  name?: string;
+}
+
+interface ExtendedUser extends User {
+  app_role: "admin" | "cashier";
+  name: string;
+}
+
 interface AuthContextType {
-  currentUser: User | null;
+  currentUser: ExtendedUser | null;
   session: Session | null;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<boolean>;
@@ -17,9 +27,20 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<ExtendedUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+
+  const processUser = (user: User | null): ExtendedUser | null => {
+    if (!user) return null;
+    
+    const metadata = user.user_metadata as UserMetadata;
+    return {
+      ...user,
+      app_role: metadata?.app_role || "cashier",
+      name: metadata?.name || user.email?.split('@')[0] || "User"
+    };
+  };
 
   useEffect(() => {
     // Check active sessions and set the user
@@ -31,7 +52,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         
         setSession(session);
-        setCurrentUser(session?.user ?? null);
+        setCurrentUser(processUser(session?.user ?? null));
       } catch (error) {
         console.error('Error checking auth session:', error);
       } finally {
@@ -44,7 +65,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      setCurrentUser(session?.user ?? null);
+      setCurrentUser(processUser(session?.user ?? null));
       setLoading(false);
     });
     
@@ -53,9 +74,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, []);
   
-  // Determine if user is admin based on their email (this is simplified and should be improved)
-  // In a real app, you might have a user_roles table or similar
-  const isAdmin = currentUser?.email === 'admin@mic3hardware.com';
+  // Determine if user is admin based on their role
+  const isAdmin = currentUser?.app_role === "admin";
   
   const login = async (email: string, password: string) => {
     try {
@@ -87,7 +107,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         password,
         options: {
           data: {
-            name
+            name,
+            app_role: "cashier" // Default role for new users
           }
         }
       });
