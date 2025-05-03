@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout/Layout';
-import { localStorageService, Expense } from '../services/localStorage';
+import { supabaseService, Expense } from '../services/supabaseService';
 import { 
   Dialog, 
   DialogContent, 
@@ -14,9 +14,9 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/components/ui/use-toast';
 import { Textarea } from '@/components/ui/textarea';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const Expenses: React.FC = () => {
-  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [currentExpense, setCurrentExpense] = useState<Expense | null>(null);
@@ -31,15 +31,79 @@ const Expenses: React.FC = () => {
   const [notes, setNotes] = useState('');
   
   const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
   
-  // Load expenses on component mount
+  // Fetch expenses using React Query
+  const { data: expenses = [], isLoading } = useQuery({
+    queryKey: ['expenses'],
+    queryFn: () => supabaseService.getExpenses()
+  });
+  
+  // Mutations for expenses
+  const createExpenseMutation = useMutation({
+    mutationFn: (expense: Partial<Expense>) => supabaseService.saveExpense(expense),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      toast({
+        title: "Expense Added",
+        description: "The expense has been successfully added."
+      });
+      setIsDialogOpen(false);
+      resetForm();
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to add expense. Please try again."
+      });
+    }
+  });
+  
+  const updateExpenseMutation = useMutation({
+    mutationFn: (expense: Partial<Expense>) => supabaseService.saveExpense(expense),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      toast({
+        title: "Expense Updated",
+        description: "The expense has been successfully updated."
+      });
+      setIsDialogOpen(false);
+      resetForm();
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to update expense. Please try again."
+      });
+    }
+  });
+  
+  const deleteExpenseMutation = useMutation({
+    mutationFn: (id: string) => supabaseService.deleteExpense(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      toast({
+        title: "Expense Deleted",
+        description: "The expense has been successfully deleted."
+      });
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete expense. Please try again."
+      });
+    }
+  });
+  
+  // Set default date to today when opening the dialog
   useEffect(() => {
-    const loadedExpenses = localStorageService.getExpenses();
-    setExpenses(loadedExpenses);
-    
-    // Set default date to today
-    setDate(new Date().toISOString().split('T')[0]);
-  }, []);
+    if (isDialogOpen && !isEditMode) {
+      setDate(new Date().toISOString().split('T')[0]);
+    }
+  }, [isDialogOpen, isEditMode]);
   
   // Filter expenses by period and search term
   const filteredExpenses = expenses.filter((expense) => {
@@ -107,12 +171,7 @@ const Expenses: React.FC = () => {
   // Delete an expense
   const handleDeleteExpense = (id: string) => {
     if (window.confirm('Are you sure you want to delete this expense?')) {
-      localStorageService.deleteExpense(id);
-      setExpenses(localStorageService.getExpenses());
-      toast({
-        title: "Expense Deleted",
-        description: "The expense has been successfully deleted."
-      });
+      deleteExpenseMutation.mutate(id);
     }
   };
   
@@ -127,8 +186,8 @@ const Expenses: React.FC = () => {
       return;
     }
     
-    const expenseData: Expense = {
-      id: isEditMode && currentExpense ? currentExpense.id : Date.now().toString(),
+    const expenseData: Partial<Expense> = {
+      id: isEditMode && currentExpense ? currentExpense.id : undefined,
       name,
       amount: parseFloat(amount),
       category,
@@ -136,18 +195,11 @@ const Expenses: React.FC = () => {
       notes: notes || undefined,
     };
     
-    localStorageService.saveExpense(expenseData);
-    setExpenses(localStorageService.getExpenses());
-    
-    setIsDialogOpen(false);
-    resetForm();
-    
-    toast({
-      title: isEditMode ? "Expense Updated" : "Expense Added",
-      description: isEditMode 
-        ? "The expense has been successfully updated." 
-        : "The expense has been successfully added."
-    });
+    if (isEditMode && currentExpense) {
+      updateExpenseMutation.mutate(expenseData);
+    } else {
+      createExpenseMutation.mutate(expenseData);
+    }
   };
   
   if (!isAdmin) {
@@ -212,73 +264,77 @@ const Expenses: React.FC = () => {
           </div>
         </div>
         
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Category
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredExpenses.length === 0 ? (
+        {isLoading ? (
+          <div className="text-center py-8">Loading expenses...</div>
+        ) : (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
                   <tr>
-                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
-                      No expenses found
-                    </td>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Category
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Amount
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
-                ) : (
-                  filteredExpenses.map((expense) => (
-                    <tr key={expense.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {expense.name}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100">
-                          {expense.category}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        KES {expense.amount.toLocaleString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(expense.date).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                        <button
-                          onClick={() => handleEditExpense(expense)}
-                          className="text-primary hover:text-primary-dark"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteExpense(expense.id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          Delete
-                        </button>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredExpenses.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                        No expenses found
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    filteredExpenses.map((expense) => (
+                      <tr key={expense.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {expense.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100">
+                            {expense.category}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          KES {expense.amount.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(expense.date).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                          <button
+                            onClick={() => handleEditExpense(expense)}
+                            className="text-primary hover:text-primary-dark"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteExpense(expense.id)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

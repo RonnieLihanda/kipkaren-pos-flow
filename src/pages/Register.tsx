@@ -37,15 +37,9 @@ const Register: React.FC = () => {
       if (success) {
         toast({
           title: 'Registration Successful',
-          description: 'Welcome to Mic3 Hardware POS!',
+          description: 'Please check your email for verification link.',
         });
-        navigate('/');
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Registration Failed',
-          description: 'This email may already be registered.',
-        });
+        navigate('/login');
       }
     } catch (error) {
       toast({
