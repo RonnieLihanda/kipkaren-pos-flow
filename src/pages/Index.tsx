@@ -3,23 +3,34 @@ import React from 'react';
 import { Layout } from '../components/Layout/Layout';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabaseService } from '@/services/supabaseService';
 import { RoleLabel } from '@/components/RoleLabel';
 import { MigrateDataButton } from '@/components/MigrateDataButton';
+import { Button } from '@/components/ui/button';
+import { RefreshCw } from 'lucide-react';
 
 const Index: React.FC = () => {
   const { currentUser, isAdmin } = useAuth();
+  const queryClient = useQueryClient();
   
-  // Fetch data using React Query
-  const { data: products = [] } = useQuery({
+  // Fetch data using React Query with shorter staleTime for more frequent updates
+  const { data: products = [], isLoading: loadingProducts } = useQuery({
     queryKey: ['products'],
-    queryFn: () => supabaseService.getProducts()
+    queryFn: () => supabaseService.getProducts(),
+    staleTime: 30000 // 30 seconds
   });
   
-  const { data: sales = [] } = useQuery({
+  const { data: sales = [], isLoading: loadingSales } = useQuery({
     queryKey: ['sales'],
-    queryFn: () => supabaseService.getSales()
+    queryFn: () => supabaseService.getSales(),
+    staleTime: 30000
+  });
+
+  const { data: expenses = [], isLoading: loadingExpenses } = useQuery({
+    queryKey: ['expenses'],
+    queryFn: () => supabaseService.getExpenses(),
+    staleTime: 30000
   });
   
   // Filter for today's sales
@@ -29,8 +40,17 @@ const Index: React.FC = () => {
     return saleDate === today;
   });
   
+  // Filter for today's expenses
+  const todayExpenses = expenses.filter((expense) => {
+    const expenseDate = new Date(expense.date).toISOString().split('T')[0];
+    return expenseDate === today;
+  });
+  
   // Calculate sales total
   const salesTotal = todaySales.reduce((sum, sale) => sum + sale.total, 0);
+  
+  // Calculate today's expenses total
+  const expensesTotal = todayExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   
   // Calculate today's profit
   const todayProfit = todaySales.reduce((profit, sale) => {
@@ -41,32 +61,54 @@ const Index: React.FC = () => {
   
   // Find low stock products
   const lowStockProducts = products.filter((product) => product.quantity <= product.reorder_level);
+  
+  // Function to refresh all data
+  const refreshData = () => {
+    queryClient.invalidateQueries({ queryKey: ['products'] });
+    queryClient.invalidateQueries({ queryKey: ['sales'] });
+    queryClient.invalidateQueries({ queryKey: ['expenses'] });
+  };
 
   return (
     <Layout>
       <div className="animate-fade-in">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Dashboard</h1>
-          <div className="flex items-center">
-            <span className="mr-2">Welcome, {currentUser?.name}</span>
-            <RoleLabel role={currentUser?.app_role || 'cashier'} />
+          <div className="flex items-center gap-4">
+            <Button variant="outline" size="sm" onClick={refreshData} className="flex items-center gap-1">
+              <RefreshCw className="h-4 w-4" />
+              <span>Refresh</span>
+            </Button>
+            <div className="flex items-center">
+              <span className="mr-2">Welcome, {currentUser?.name}</span>
+              <RoleLabel role={currentUser?.app_role || 'cashier'} />
+            </div>
           </div>
         </div>
         
         {isAdmin && (
           <div className="mb-6">
-            <MigrateDataButton />
+            <div className="p-4 bg-white rounded-lg shadow">
+              <h2 className="text-lg font-medium mb-2">Admin Tools</h2>
+              <MigrateDataButton />
+            </div>
           </div>
         )}
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
             <CardHeader className="bg-primary/5 pb-2">
               <CardTitle className="text-lg font-medium">Today's Sales</CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
-              <p className="text-3xl font-bold">KES {salesTotal.toLocaleString()}</p>
-              <p className="text-sm text-gray-500 mt-1">{todaySales.length} transactions</p>
+              {loadingSales ? (
+                <div className="animate-pulse h-8 bg-gray-100 rounded"></div>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold">KES {salesTotal.toLocaleString()}</p>
+                  <p className="text-sm text-gray-500 mt-1">{todaySales.length} transactions</p>
+                </>
+              )}
             </CardContent>
           </Card>
           
@@ -75,8 +117,30 @@ const Index: React.FC = () => {
               <CardTitle className="text-lg font-medium">Today's Profit</CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
-              <p className="text-3xl font-bold">KES {todayProfit.toLocaleString()}</p>
-              <p className="text-sm text-gray-500 mt-1">Gross profit</p>
+              {loadingSales ? (
+                <div className="animate-pulse h-8 bg-gray-100 rounded"></div>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold">KES {todayProfit.toLocaleString()}</p>
+                  <p className="text-sm text-gray-500 mt-1">Gross profit</p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="bg-red-50 pb-2">
+              <CardTitle className="text-lg font-medium">Today's Expenses</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {loadingExpenses ? (
+                <div className="animate-pulse h-8 bg-gray-100 rounded"></div>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold">KES {expensesTotal.toLocaleString()}</p>
+                  <p className="text-sm text-gray-500 mt-1">{todayExpenses.length} expense entries</p>
+                </>
+              )}
             </CardContent>
           </Card>
           
@@ -85,8 +149,14 @@ const Index: React.FC = () => {
               <CardTitle className="text-lg font-medium">Low Stock Alert</CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
-              <p className="text-3xl font-bold">{lowStockProducts.length}</p>
-              <p className="text-sm text-gray-500 mt-1">Products below reorder level</p>
+              {loadingProducts ? (
+                <div className="animate-pulse h-8 bg-gray-100 rounded"></div>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold">{lowStockProducts.length}</p>
+                  <p className="text-sm text-gray-500 mt-1">Products below reorder level</p>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -179,6 +249,52 @@ const Index: React.FC = () => {
                         }`}>
                           {sale.payment_method.toUpperCase()}
                         </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+        
+        {todayExpenses.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-xl font-medium mb-4">Today's Expenses</h2>
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Category
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Amount
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Notes
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {todayExpenses.slice(0, 5).map((expense) => (
+                    <tr key={expense.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {expense.name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100">
+                          {expense.category}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        KES {expense.amount.toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {expense.notes || '-'}
                       </td>
                     </tr>
                   ))}

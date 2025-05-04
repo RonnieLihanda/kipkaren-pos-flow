@@ -1,68 +1,54 @@
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import React, { useState } from 'react';
+import { Button } from './ui/button';
 import { migrateData } from '@/utils/migrateData';
-import { toast } from '@/components/ui/use-toast';
-import { useAuth } from '@/context/AuthContext';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { useToast } from './ui/use-toast';
+import { Loader2 } from 'lucide-react';
 
-export const MigrateDataButton = () => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const { isAdmin } = useAuth();
-  
-  const handleMigration = async () => {
-    setIsLoading(true);
-    setIsDialogOpen(false);
-    
+export const MigrateDataButton: React.FC = () => {
+  const [isMigrating, setIsMigrating] = useState(false);
+  const { toast } = useToast();
+
+  const handleMigrate = async () => {
     try {
+      setIsMigrating(true);
       const success = await migrateData();
       
       if (success) {
         toast({
-          title: 'Data Migration Successful',
-          description: 'All data has been migrated to the Supabase database.',
-        });
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Migration Failed',
-          description: 'An error occurred during migration. Please check console logs.',
+          title: 'Migration Successful',
+          description: 'All data has been successfully migrated to the database.',
+          duration: 5000
         });
       }
+    } catch (error) {
+      console.error('Migration error:', error);
+      toast({
+        title: 'Migration Failed',
+        description: 'An error occurred during migration.',
+        variant: 'destructive',
+        duration: 5000
+      });
     } finally {
-      setIsLoading(false);
+      setIsMigrating(false);
     }
   };
-  
-  if (!isAdmin) return null;
-  
+
   return (
-    <>
-      <Button 
-        onClick={() => setIsDialogOpen(true)} 
-        disabled={isLoading} 
-        variant="outline"
-        className="w-full"
-      >
-        {isLoading ? 'Migrating Data...' : 'Migrate Data from Local Storage to Database'}
-      </Button>
-      
-      <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Migrate Data</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will copy all data from localStorage to Supabase database. This operation cannot be undone. 
-              Are you sure you want to continue?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleMigration}>Continue</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+    <Button 
+      onClick={handleMigrate} 
+      disabled={isMigrating} 
+      className="w-full py-6 text-base font-medium"
+      variant="default"
+    >
+      {isMigrating ? (
+        <>
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Migrating Data...
+        </>
+      ) : (
+        'Migrate Data from Local Storage to Database'
+      )}
+    </Button>
   );
 };
