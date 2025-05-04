@@ -53,6 +53,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         setSession(session);
         setCurrentUser(processUser(session?.user ?? null));
+        console.log("Current user metadata:", session?.user?.user_metadata);
       } catch (error) {
         console.error('Error checking auth session:', error);
       } finally {
@@ -64,6 +65,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log("Auth state changed, new metadata:", session?.user?.user_metadata);
       setSession(session);
       setCurrentUser(processUser(session?.user ?? null));
       setLoading(false);
