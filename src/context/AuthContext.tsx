@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
@@ -33,6 +32,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const processUser = (user: User | null): ExtendedUser | null => {
     if (!user) return null;
+    
+    // Special handling for the specific user to make them admin
+    if (user.email === 'ronnielihanda@gmail.com') {
+      console.log("Setting ronnielihanda@gmail.com as admin");
+      return {
+        ...user,
+        app_role: "admin",
+        name: user.email?.split('@')[0] || "Ronnie"
+      };
+    }
     
     const metadata = user.user_metadata as UserMetadata;
     return {
@@ -77,7 +86,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
   
   // Determine if user is admin based on their role
-  const isAdmin = currentUser?.app_role === "admin";
+  // For ronnielihanda@gmail.com, we're forcing admin rights
+  const isAdmin = currentUser?.email === 'ronnielihanda@gmail.com' || currentUser?.app_role === "admin";
   
   const login = async (email: string, password: string) => {
     try {
